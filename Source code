@@ -1,0 +1,110 @@
+import numpy as np
+import math
+
+# def levy_flight(size, alpha=1.5, beta=0.5):
+#     sigma = (np.math.gamma(1 + alpha) * np.sin(np.pi * alpha / 2) / (
+#                 np.math.gamma((1 + alpha) / 2) * alpha * 2 ** ((alpha - 1) / 2))) ** (1 / alpha)
+#     u = np.random.normal(0, sigma, size)
+#     v = np.random.normal(0, 1, size)
+#     r = u / (abs(v) ** (1 / alpha))
+#     x = np.random.normal(0, (1 / beta), size)
+#     return x * r
+
+
+def initialization(search_agents_no, dim, ub, lb):
+    # Number of boundaries
+    boundary_no = len(ub)
+
+    # If the boundaries of all variables are equal and user enters a single number for both ub and lb
+    if boundary_no == 1:
+        positions = np.random.rand(search_agents_no, dim) * (ub - lb) + lb
+    else:
+        # If each variable has a different lb and ub
+        positions = np.zeros((search_agents_no, dim))
+        for i in range(dim):
+            ub_i = ub[i]
+            lb_i = lb[i]
+            positions[:, i] = np.random.rand(search_agents_no) * (ub_i - lb_i) + lb_i
+
+    return positions
+
+
+def MAO_2017(pop_size, tmax, ub, lb, dim, f):
+    conv_curve = np.zeros(tmax)
+
+    # Controlling parameters
+    t = 0  # Function evaluation counter
+
+    # Initialization
+    x = initialization(pop_size, dim, ub, lb)  # Initialize the positions of crested porcupines
+
+    # Evaluation
+    fitness = np.zeros(pop_size)
+    for i in range(pop_size):
+        fitness[i] = f(x[i, :][np.newaxis, :])
+
+    # Update the best-so-far solution
+    gb_fit = x[np.argmin(fitness), :]
+    gb_sol = fitness[np.argmin(fitness)]
+
+    xp = x.copy()  # A new array to store the personal best position for each crested porcupine
+    best_F = np.inf
+    best_Sol = np.ones(dim) * np.inf
+
+    # Optimization Process of CPO
+    while t < tmax:
+        for i in range(pop_size):
+            # D = np.random.rand(dim) > np.random.rand()
+
+            D = np.zeros(dim)
+            num = np.random.randint(low=1,high=dim)
+            for j in range(num):
+                D[j] = 1
+            np.random.shuffle(D)
+
+            # print(D)
+            ll = np.random.choice(range(pop_size), size=2, replace=False)
+
+
+            if np.random.rand() < 1-t/tmax:  # Third defense mechanism
+                x[i, :] = (1 - D) * x[i, :] + D * (x[ll[1], :] + np.random.normal(loc=0.0, scale=10) * (x[ll[0], :] - x[ll[1], :]))
+            else:  # Fourth defense mechanism
+                if (t>=800) or (t%2==0 and t>200):
+                    x[i, :] = best_Sol.copy() + np.random.normal(loc=0.0, scale=10) * (1 - t / 1000) * (x[ll[0], :] - x[ll[1], :])
+                else:
+                    x[i, :] = x[i, :].copy() + np.random.normal(loc=0.0, scale=10) * (1 - t / 1000) * (
+                                x[ll[0], :] - x[ll[1], :])
+
+
+
+
+            for j in range(dim):
+                if x[i, j] > ub[j]:
+                    x[i, j] = lb[j] + np.random.rand() * (ub[j] - lb[j])
+                elif x[i, j] < lb[j]:
+                    x[i, j] = lb[j] + np.random.rand() * (ub[j] - lb[j])
+
+                    # Calculate the fitness value of the newly generated solution
+            nf = f(x[i, :][np.newaxis, :])
+            # print(fitness[i])
+
+            # Update Global & Personal best solution
+            if fitness[i] < nf[0]:
+                x[i, :] = xp[i, :]  # Update local best solution
+            else:
+                xp[i, :] = x[i, :]
+                fitness[i] = nf[0]
+                if fitness[i] <= gb_fit[np.argmin(fitness[i] - gb_fit)]:
+                    gb_sol = x[i, :]  # Update global best solution
+                    gb_fit = fitness[i]
+
+            if fitness[i] < best_F:
+                best_F = fitness[i]
+                best_Sol = xp[i, :].copy()
+
+        # conv_curve[t] = gb_fit if isinstance(gb_fit, (int, float)) else np.min(gb_fit)  # Simplification for single-objective case
+        conv_curve[t] = best_F  # Simplification for single-objective case
+        t += 1  # Move to the next generation
+
+    return best_F, best_Sol, conv_curve
+
